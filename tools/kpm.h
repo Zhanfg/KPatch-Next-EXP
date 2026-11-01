@@ -32,7 +32,7 @@ struct load_info
     {
         const char *base;
         uint64_t size;
-        const char *name, *version, *license, *author, *description;
+        const char *name, *version, *license, *author, *description, *abi;
     } info;
     Elf_Ehdr *hdr;
     uint64_t len;
@@ -47,7 +47,7 @@ struct load_info
 
 typedef struct
 {
-    const char *name, *version, *license, *author, *description;
+    const char *name, *version, *license, *author, *description, *abi;
 } kpm_info_t;
 
 int get_kpm_info(const char *kpm, int len, kpm_info_t *info);
