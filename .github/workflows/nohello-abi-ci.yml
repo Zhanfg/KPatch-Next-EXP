@@ -1,0 +1,56 @@
+name: Nohello KPM ABI compatibility CI
+
+on:
+  push:
+    branches:
+      - fix/nohello-legacy-kpm-abi
+    paths:
+      - kernel/**
+      - .github/workflows/nohello-abi-ci.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-kpimg:
+    name: Build patched KPIMG and verify legacy export
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install AArch64 bare-metal toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/arm-toolchain.tar.xz \
+            https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu/12.2.rel1/binrel/arm-gnu-toolchain-12.2.rel1-x86_64-aarch64-none-elf.tar.xz
+          mkdir -p /tmp/kp-toolchain
+          tar -xJf /tmp/arm-toolchain.tar.xz -C /tmp/kp-toolchain --strip-components=1
+          echo "TARGET_COMPILE=/tmp/kp-toolchain/bin/aarch64-none-elf-" >> "$GITHUB_ENV"
+
+      - name: Build kernel image
+        run: |
+          set -euo pipefail
+          make -C kernel
+          test -s kernel/kpimg
+          test -s kernel/kpimg.elf
+
+      - name: Verify ABI compatibility symbol
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/kp-toolchain/bin/aarch64-none-elf-nm -a kernel/kpimg.elf \
+            | grep -F '__kp_symbol_is_su_allow_uid' > /dev/null
+          echo 'Legacy is_su_allow_uid export is present.'
+          sha256sum kernel/kpimg
+
+      - name: Upload patched KPIMG (test artifact only; not flashable)
+        uses: actions/upload-artifact@v4
+        with:
+          name: kpimg-nohello-abi-${{ github.run_number }}
+          path: kernel/kpimg
+          if-no-files-found: error
+          retention-days: 30
