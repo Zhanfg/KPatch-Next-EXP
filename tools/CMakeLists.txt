@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.5)
 project (kptools)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+# Keep host kptools ABI structs identical to the embedded kpimg core.
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../kernel/include)
 
 set(SOURCES
 	image.c
@@ -12,6 +14,7 @@ set(SOURCES
 	patch.c
 	symbol.c
 	kpm.c
+	sha256.c
 	common.c
 	x86_64.c
 )
