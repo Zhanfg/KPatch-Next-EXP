@@ -1,5 +1,5 @@
 
-CFLAGS = -std=c11 -Wall -Wextra -Wno-unused -Wno-unused-parameter
+CFLAGS = -std=c11 -Wall -Wextra -Wno-unused -Wno-unused-parameter -I../kernel/include
 LDFLAGS = -lz
 ifdef DEBUG
 	CFLAGS += -DDEBUG -g
@@ -22,6 +22,5 @@ kptools.o: ../version
 
 .PHONY: clean
 clean:
-	rm -rf preset.h
 	rm -rf kptools
 	find . -name "*.o" | xargs rm -f
