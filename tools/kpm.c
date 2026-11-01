@@ -108,6 +108,7 @@ int get_kpm_info(const char *kpm, int len, kpm_info_t *out_info)
     out_info->license = get_modinfo(info, "license");
     out_info->author = get_modinfo(info, "author");
     out_info->description = get_modinfo(info, "description");
+    out_info->abi = get_modinfo(info, "abi");
 
     return 0;
 }
@@ -119,6 +120,7 @@ void print_kpm_info(kpm_info_t *info)
     fprintf(stdout, "license=%s\n", info->license);
     fprintf(stdout, "author=%s\n", info->author);
     fprintf(stdout, "description=%s\n", info->description);
+    if (info->abi) fprintf(stdout, "abi=%s\n", info->abi);
 }
 
 int print_kpm_info_path(const char *kpm_path)
