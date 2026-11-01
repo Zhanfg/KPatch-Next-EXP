@@ -6,7 +6,7 @@ ifdef DEBUG
 endif
 
 objs := image.o kallsym.o kptools.o order.o insn.o patch.o symbol.o kpm.o common.o x86_64.o
-objs += sha256.o
+# No standalone sha256.o is needed by the host tools.
 
 .PHONY: all
 all: kptools
