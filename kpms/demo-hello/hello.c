@@ -16,6 +16,9 @@ KPM_NAME("kpm-hello-demo");
 ///< The version of the module.
 KPM_VERSION("1.0.0");
 
+///< Optional KPM ABI declaration for new modules; old modules remain legacy.
+KPM_ABI("1");
+
 ///< The license type.
 KPM_LICENSE("GPL v2");
 
