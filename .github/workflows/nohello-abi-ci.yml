@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - fix/nohello-legacy-kpm-abi
+      - main
+      - security/ap-upstream-kpm-data-hygiene
     paths:
-      - kernel/**
-      - .github/workflows/nohello-abi-ci.yml
+      - 'kernel/**'
+      - 'checks/**'
+      - '.github/workflows/nohello-abi-ci.yml'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -20,6 +26,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Security regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 checks/check_kpm_data_hygiene.py
+          cc -std=c11 -O2 -Wall -Wextra -Werror \
+            -o /tmp/test_kpm_secure_wipe checks/test_kpm_secure_wipe.c
+          /tmp/test_kpm_secure_wipe
 
       - name: Install AArch64 bare-metal toolchain
         shell: bash
