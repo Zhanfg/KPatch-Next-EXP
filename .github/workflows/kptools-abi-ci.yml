@@ -1,0 +1,42 @@
+name: KPN EXP host kptools ABI build
+on:
+  push:
+    branches:
+      - fix/kptools-preset-include-20261101
+    paths:
+      - 'tools/**'
+      - 'kernel/include/preset.h'
+      - '.github/workflows/kptools-abi-ci.yml'
+  pull_request:
+    paths:
+      - 'tools/**'
+      - 'kernel/include/preset.h'
+      - '.github/workflows/kptools-abi-ci.yml'
+permissions:
+  contents: read
+jobs:
+  tools-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install compiler and zlib
+        run: sudo apt-get update -qq && sudo apt-get install -y cmake build-essential zlib1g-dev
+      - name: Verify ABI symbols are provided by original core header
+        run: |
+          set -euo pipefail
+          test ! -e tools/preset.h
+          grep -Fq 'typedef struct _setup_preset_t' kernel/include/preset.h
+          grep -Fq '#define EXTRA_ALIGN 0x10' kernel/include/preset.h
+      - name: Build with GNU Make
+        run: |
+          set -euo pipefail
+          make -C tools -j2
+          test -x tools/kptools
+          tools/kptools --version
+      - name: Build with CMake
+        run: |
+          set -euo pipefail
+          cmake -S tools -B /tmp/kpn-exp-cmake -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/kpn-exp-cmake --parallel 2
+          test -x /tmp/kpn-exp-cmake/kptools
+          /tmp/kpn-exp-cmake/kptools --version
