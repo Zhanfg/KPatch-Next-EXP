@@ -3,7 +3,7 @@ project (kptools)
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 # Keep host kptools ABI structs identical to the embedded kpimg core.
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../kernel/include)
+# Use quote-only search: never shadow libc's <stdint.h> with kernel/include/stdint.h.
 
 set(SOURCES
 	image.c
@@ -22,6 +22,7 @@ add_executable(
 	kptools 
 	${SOURCES}
 )
+target_compile_options(kptools PRIVATE "-iquote${CMAKE_CURRENT_SOURCE_DIR}/../kernel/include")
 
 find_package(ZLIB REQUIRED)
 	
