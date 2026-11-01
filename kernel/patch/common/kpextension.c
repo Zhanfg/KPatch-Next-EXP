@@ -10,6 +10,19 @@
 
 static int exclude_kstorage_gid = -1;
 
+/*
+ * Legacy KPatch-Next KPM ABI: older modules refer to is_su_allow_uid().
+ * EXP has no per-UID SU allowlist; its supercall is restricted to UID 0.
+ * Mirror that policy for the legacy read-only query, without adding any
+ * privilege-granting path or reviving the obsolete allowlist.
+ * Keep this aligned with supercall_before() in common/supercall.c.
+ */
+int is_su_allow_uid(uid_t uid)
+{
+    return uid == 0;
+}
+KP_EXPORT_SYMBOL(is_su_allow_uid);
+
 int set_ap_mod_exclude(uid_t uid, int exclude)
 {
     int rc = 0;
