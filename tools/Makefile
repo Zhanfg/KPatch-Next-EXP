@@ -1,5 +1,5 @@
 
-CFLAGS = -std=c11 -Wall -Wextra -Wno-unused -Wno-unused-parameter -I../kernel/include
+CFLAGS = -std=c11 -Wall -Wextra -Wno-unused -Wno-unused-parameter -iquote ../kernel/include
 LDFLAGS = -lz
 ifdef DEBUG
 	CFLAGS += -DDEBUG -g
