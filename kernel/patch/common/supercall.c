@@ -30,6 +30,7 @@
 #include <kpextension.h>
 #include <kstorage.h>
 #include <rehook.h>
+#include <kpsecure.h>
 
 #include <linux/umh.h>
 
@@ -67,36 +68,61 @@ static long call_buildtime(char __user *out_buildtime, int u_len)
 static long call_user_event(const char __user *uevent, const char __user *uargs)
 {
     char event[EXTRA_EVENT_LEN], args[KPM_ARGS_LEN];
-    long event_len, args_len = 0;
+    long event_len, args_len = 0, rc = 0;
 
     if (!uevent) return -EINVAL;
     event_len = compat_strncpy_from_user(event, uevent, sizeof(event));
-    if (event_len <= 0) return -EINVAL;
+    if (event_len <= 0) {
+        rc = -EINVAL;
+        goto out;
+    }
 
     if (uargs) {
         args_len = compat_strncpy_from_user(args, uargs, sizeof(args));
-        if (args_len < 0) return args_len;
+        if (args_len < 0) {
+            rc = args_len;
+            goto out;
+        }
     }
     extra_event_init_args(event, args_len <= 0 ? 0 : args);
-    return 0;
+out:
+    /* Only these temporary copies are erased, after the synchronous event.
+     * Persistent KPM state is owned by the module and must remain usable. */
+    kp_exp_secure_wipe(event, sizeof(event));
+    kp_exp_secure_wipe(args, sizeof(args));
+    return rc;
 }
 
 static long call_kpm_load(const char __user *arg1, const char *__user arg2, void *__user reserved)
 {
     char path[1024], args[KPM_ARGS_LEN];
-    long pathlen = compat_strncpy_from_user(path, arg1, sizeof(path));
-    if (pathlen <= 0) return -EINVAL;
+    long rc, pathlen = compat_strncpy_from_user(path, arg1, sizeof(path));
+    if (pathlen <= 0) {
+        rc = -EINVAL;
+        goto out;
+    }
     long arglen = compat_strncpy_from_user(args, arg2, sizeof(args));
-    return load_module_path(path, arglen <= 0 ? 0 : args, reserved);
+    rc = load_module_path(path, arglen <= 0 ? 0 : args, reserved);
+out:
+    kp_exp_secure_wipe(args, sizeof(args));
+    kp_exp_secure_wipe(path, sizeof(path));
+    return rc;
 }
 
 static long call_kpm_control(const char __user *arg1, const char *__user arg2, void *__user out_msg, int outlen)
 {
     char name[KPM_NAME_LEN], args[KPM_ARGS_LEN];
-    long namelen = compat_strncpy_from_user(name, arg1, sizeof(name));
-    if (namelen <= 0) return -EINVAL;
+    long rc, namelen = compat_strncpy_from_user(name, arg1, sizeof(name));
+    if (namelen <= 0) {
+        rc = -EINVAL;
+        goto out;
+    }
     long arglen = compat_strncpy_from_user(args, arg2, sizeof(args));
-    return module_control0(name, arglen <= 0 ? 0 : args, out_msg, outlen);
+    rc = module_control0(name, arglen <= 0 ? 0 : args, out_msg, outlen);
+out:
+    kp_exp_secure_wipe(args, sizeof(args));
+    kp_exp_secure_wipe(name, sizeof(name));
+    return rc;
 }
 
 static long call_kpm_unload(const char *__user arg1, void *__user reserved)
@@ -129,13 +155,27 @@ static long call_kpm_info(const char *__user uname, char *__user out_info, int o
     if (out_len <= 0) return -EINVAL;
     char name[64];
     char buf[2048];
-    int len = compat_strncpy_from_user(name, uname, sizeof(name));
-    if (len <= 0) return -EINVAL;
+    int rc, len = compat_strncpy_from_user(name, uname, sizeof(name));
+    if (len <= 0) {
+        rc = -EINVAL;
+        goto out;
+    }
     int sz = get_module_info(name, buf, sizeof(buf));
-    if (sz < 0) return sz;
-    if (sz > out_len) return -ENOBUFS;
-    sz = compat_copy_to_user(out_info, buf, sz);
-    return sz;
+    if (sz < 0) {
+        rc = sz;
+        goto out;
+    }
+    if (sz > out_len) {
+        rc = -ENOBUFS;
+        goto out;
+    }
+    rc = compat_copy_to_user(out_info, buf, sz);
+out:
+    /* The manager's root-only API still returns the original fields, but
+     * the kernel stack must not retain the serialized KPM arguments. */
+    kp_exp_secure_wipe(buf, sizeof(buf));
+    kp_exp_secure_wipe(name, sizeof(name));
+    return rc;
 }
 
 static long call_kstorage_read(int gid, long did, void *out_data, int offset, int dlen)
