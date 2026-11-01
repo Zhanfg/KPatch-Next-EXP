@@ -53,6 +53,32 @@ jobs:
           test -s kernel/kpimg
           test -s kernel/kpimg.elf
 
+      - name: Verify opt-in ABI metadata and legacy fallback with real KPM files
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C kpms/demo-hello
+          cmake -S tools -B /tmp/kptools-abi -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/kptools-abi --parallel 2
+          /tmp/kptools-abi/kptools -l -M kpms/demo-hello/hello.kpm | tee /tmp/kpm-modern.txt
+          grep -Fxq 'abi=1' /tmp/kpm-modern.txt
+          # Compile the same sample without optional ABI metadata. It must
+          # still be accepted and must not acquire a fabricated ABI value.
+          sed '/KPM_ABI("1");/d' kpms/demo-hello/hello.c > kpms/demo-hello/legacy-abi-test.c
+          (
+            cd kpms/demo-hello
+            ${TARGET_COMPILE}gcc -O2 -Thello.lds -c \
+              -I../../kernel -I../../kernel/include -I../../kernel/patch/include \
+              -I../../kernel/linux/include -I../../kernel/linux/arch/arm64/include \
+              -I../../kernel/linux/tools/arch/arm64/include \
+              legacy-abi-test.c -o legacy-abi-test.o
+            ${TARGET_COMPILE}gcc -r -o legacy-abi-test.kpm legacy-abi-test.o
+          )
+          /tmp/kptools-abi/kptools -l -M kpms/demo-hello/legacy-abi-test.kpm | tee /tmp/kpm-legacy.txt
+          grep -Fxq 'version=1.0.0' /tmp/kpm-legacy.txt
+          ! grep -q '^abi=' /tmp/kpm-legacy.txt
+          echo 'ABI 1 and legacy KPM both parsed without changing load signatures.'
+
       - name: Verify ABI compatibility symbol
         shell: bash
         run: |
