@@ -14,7 +14,6 @@ set(SOURCES
 	patch.c
 	symbol.c
 	kpm.c
-	sha256.c
 	common.c
 	x86_64.c
 )
