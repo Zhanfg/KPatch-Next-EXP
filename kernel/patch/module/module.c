@@ -12,6 +12,7 @@
 #include <symbol.h>
 #include <kallsyms.h>
 #include <cache.h>
+#include <kpsecure.h>
 #include <common.h>
 #include <linux/fs.h>
 #include <uapi/linux/fs.h>
@@ -504,17 +505,24 @@ long load_module_ex(const void *data, int len, const char *args, const char *eve
     rc = (*mod->init)(mod->args, event, reserved);
 
     if (!rc) {
-        logkfi("[%s] succeed with [%s] \n", mod->info.name, args);
+        logkfi("[%s] load succeeded\n", mod->info.name);
         list_add_tail(&mod->list, &modules.list);
         goto out;
     } else {
         set_load_error(info, "module init failed");
-        logkfi("[%s] failed with [%s] error: %ld, try exit ...\n", mod->info.name, args, rc);
+        logkfi("[%s] load failed: %ld, try exit ...\n", mod->info.name, rc);
         (*mod->exit)(reserved);
     }
 
 free:
-    if (mod->args) kvfree(mod->args);
+    if (mod->args) {
+        kp_exp_secure_wipe(mod->args, strlen(mod->args) + 1);
+        kvfree(mod->args);
+    }
+    if (mod->ctl_args) {
+        kp_exp_secure_wipe(mod->ctl_args, strlen(mod->ctl_args) + 1);
+        kvfree(mod->ctl_args);
+    }
     kp_free_exec(mod->start);
 free1:
     kvfree(mod);
@@ -552,8 +560,16 @@ long unload_module(const char *name, void *__user reserved)
     /* Drain readers that found mod before it was unlinked, then free. */
     synchronize_rcu();
 
-    if (mod->args) kvfree(mod->args);
-    if (mod->ctl_args) kvfree(mod->ctl_args);
+    /* The KPM may retain load/control parameters until exit; wipe only
+     * after its exit callback and the RCU grace period have completed. */
+    if (mod->args) {
+        kp_exp_secure_wipe(mod->args, strlen(mod->args) + 1);
+        kvfree(mod->args);
+    }
+    if (mod->ctl_args) {
+        kp_exp_secure_wipe(mod->ctl_args, strlen(mod->ctl_args) + 1);
+        kvfree(mod->ctl_args);
+    }
     kp_free_exec(mod->start);
     kvfree(mod);
     logkfi("name: %s, rc: %ld\n", name, rc);
@@ -621,7 +637,8 @@ long module_control0(const char *name, const char *ctl_args, char *__user out_ms
     int args_len = strlen(ctl_args);
     if (args_len <= 0) return -EINVAL;
 
-    logkfi("name %s, args: %s\n", name, ctl_args);
+    /* Control strings may contain credentials; never print the payload. */
+    logkfd("KPM ctl0 requested\n");
 
     long rc = 0;
     rcu_read_lock();
@@ -638,7 +655,10 @@ long module_control0(const char *name, const char *ctl_args, char *__user out_ms
         goto out;
     }
 
-    if (mod->ctl_args) kvfree(mod->ctl_args);
+    if (mod->ctl_args) {
+        kp_exp_secure_wipe(mod->ctl_args, strlen(mod->ctl_args) + 1);
+        kvfree(mod->ctl_args);
+    }
 
     mod->ctl_args = vmalloc(args_len + 1);
     if (!mod->ctl_args) {
@@ -650,7 +670,7 @@ long module_control0(const char *name, const char *ctl_args, char *__user out_ms
 
     rc = (*mod->ctl0)(mod->ctl_args, out_msg, outlen);
 
-    logkfi("name: %s, rc: %d\n", name, rc);
+    logkfi("name: %s, rc: %ld\n", name, rc);
 out:
     rcu_read_unlock();
     return rc;
@@ -658,7 +678,8 @@ out:
 
 long module_control1(const char *name, void *a1, void *a2, void *a3)
 {
-    logkfi("name %s, a1: %llx, a2: %llx, a3: %llx\n", name, a1, a2, a3);
+    /* Raw addresses may leak kernel/user pointers into persistent logs. */
+    logkfd("KPM ctl1 requested\n");
     long rc = 0;
     rcu_read_lock();
 
@@ -676,7 +697,7 @@ long module_control1(const char *name, void *a1, void *a2, void *a3)
 
     rc = (*mod->ctl1)(a1, a2, a3);
 
-    logkfi("name: %s, rc: %d\n", name, rc);
+    logkfi("name: %s, rc: %ld\n", name, rc);
 out:
     rcu_read_unlock();
     return rc;
@@ -784,7 +805,9 @@ int get_module_info(const char *name, char *out_info, int size)
     }
 
     out_info[size - 1] = '\0';
-    logkfd("%s", out_info);
+    /* Keep the root-only query result unchanged for the manager UI;
+     * do not duplicate its potentially sensitive args in kernel logs. */
+    logkfd("KPM info queried\n");
 
     rcu_read_unlock();
     return sz;
