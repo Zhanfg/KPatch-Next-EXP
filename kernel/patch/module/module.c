@@ -351,6 +351,7 @@ static int move_module(struct module *mod, struct load_info *info)
     if (info->info.license) mod->info.license = info->info.license - info->info.base + mod->info.base;
     if (info->info.author) mod->info.author = info->info.author - info->info.base + mod->info.base;
     if (info->info.description) mod->info.description = info->info.description - info->info.base + mod->info.base;
+    if (info->info.abi) mod->info.abi = info->info.abi - info->info.base + mod->info.base;
 
     return 0;
 }
@@ -410,6 +411,7 @@ static int setup_load_info(struct load_info *info)
     logkd("    author: %s\n", author);
     const char *description = get_modinfo(info, "description");
     info->info.description = description;
+    info->info.abi = get_modinfo(info, "abi");
     logkd("    description: %s\n", description);
 
     for (int i = 1; i < info->hdr->e_shnum; i++) {
@@ -801,6 +803,13 @@ int get_module_info(const char *name, char *out_info, int size)
                             "load_event=%s\n"
                             "load_source=%s\n",
                             mod->load_event, mod->load_source);
+        if (tail > 0) sz += tail;
+    }
+
+    /* Existing fields stay intact for legacy clients; a new ABI field is
+     * appended only when the KPM expressly declares abi= in .kpm.info. */
+    if (mod->info.abi && sz >= 0 && sz < size) {
+        int tail = snprintf(out_info + sz, size - sz, "abi=%s\n", mod->info.abi);
         if (tail > 0) sz += tail;
     }
 
