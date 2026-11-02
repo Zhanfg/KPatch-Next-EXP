@@ -1,0 +1,66 @@
+name: Linux 4.19.325 hotpatch compatibility simulation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - checks/linux419_hotpatch_host_sim.py
+      - kernel/base/hotpatch.c
+      - .github/workflows/linux419-compat-ci.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  simulate-linux419:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout real KPN EXP production source
+        uses: actions/checkout@v4
+
+      - name: Inspect OnePlus 6 Linux 4.19 source (sparse + pinned commit)
+        uses: actions/checkout@v4
+        with:
+          repository: Zhanfg/android_kernel_oneplus_sdm845
+          ref: 366654798a2f17c0d57c702ef3d4f2142437c8f0
+          path: op6-linux419
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            Makefile
+            arch/arm64/kernel/insn.c
+
+      - name: Verify exact kernel base and ARM64 patching preconditions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          mk = Path('op6-linux419/Makefile').read_text()
+          for key, expected in {'VERSION':'4','PATCHLEVEL':'19','SUBLEVEL':'325'}.items():
+              found = re.search(r'(?m)^'+key+r'\s*=\s*(\d+)', mk)
+              assert found and found.group(1)==expected, f'{key}: expected {expected}'
+          insn = Path('op6-linux419/arch/arm64/kernel/insn.c').read_text()
+          for required in ('aarch64_insn_patch_text_nosync', 'vmalloc_to_page(addr)',
+                           'CONFIG_STRICT_MODULE_RWX', 'stop_machine_cpuslocked'):
+              assert required in insn, f'OnePlus6 4.19 source missing {required}'
+          print('PASS OnePlus6 kernel version 4.19.325 and ARM64 text-patching functions')
+          print('WARN kernel CONFIG_STRICT_MODULE_RWX and real alias/TLB behavior not runtime-proven')
+          PY
+
+      - name: Compile extracted production C and simulate 4.19.325 SMP/error paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 checks/linux419_hotpatch_host_sim.py
+
+      - name: Check security and Nohello ABI invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 checks/check_kpm_data_hygiene.py
+          cc -std=c11 -O2 -Wall -Wextra -Werror -o /tmp/secure-wipe checks/test_kpm_secure_wipe.c
+          /tmp/secure-wipe
