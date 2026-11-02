@@ -60,7 +60,7 @@ prelude = r"""
 #define log_boot(...) ((void)0)
 #define ATOMIC_INIT(x) ATOMIC_VAR_INIT(x)
 #define atomic_inc_return(p) (atomic_fetch_add((p),1)+1)
-static inline int sim_atomic_dec_return(atomic_t *p) { return atomic_fetch_sub(p,1)-1; }
+static inline int sim_atomic_dec_return(_Atomic int *p) { return atomic_fetch_sub(p,1)-1; }
 #define atomic_dec_return(p) sim_atomic_dec_return(p)
 #define atomic_inc(p) ((void)atomic_fetch_add((p),1))
 #define atomic_read(p) atomic_load((p))
