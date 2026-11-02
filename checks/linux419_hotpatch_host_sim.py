@@ -90,7 +90,7 @@ static void flush_icache_all(void){++flush_icache_count;}
 static uintptr_t *pgtable_entry_kernel(uintptr_t x){(void)x;return fail_map?NULL:&mock_pte;}
 static uintptr_t pgtable_phys_kernel(uintptr_t x){return !x||fail_phys?0:0x2000;}
 static void *vmalloc(size_t n){return calloc(1,n);}
-static unsigned num_online_cpus(void){return online_cpus;}
+static int num_online_cpus(void){return (int)online_cpus;}
 static inline int is_interrupt_masked(void){return interrupts;}
 static int nosync(void *addr,uint32_t insn){
     ++call_nosync;
